@@ -1,4 +1,4 @@
-from classes import Connection, Event
+from classes import Connection, Event, TSO
 from docx import Document
 from docx.shared import Cm
 from openpyxl import load_workbook
@@ -18,7 +18,7 @@ def get_connections(ws):
         connection = Connection(
             id=str(ws['A' + str(i + 11)].value),
             title=ws['B' + str(i + 11)].value,
-            units=ws['C' + str(i + 11)].value,
+            units=ws['C' + str(i + 11)].value or '',
             input_value=ws['D' + str(i + 11)].value,
         )
         connections.append(connection)
@@ -41,17 +41,40 @@ def get_events(ws):
         event = Event(
             id=str(ws['A' + str(20 + i)].value),
             title=ws['B' + str(20 + i)].value,
-            diameter=str(ws['C' + str(20 + i)].value),
+            diameter=str(ws['C' + str(20 + i)].value or ''),
             length=str(ws['D' + str(20 + i)].value),
-            capex=str(ws['F' + str(20 + i)].value),
+            input_capex=(ws['E' + str(20 + i)].value),
         )
-    events.append(event)
+        events.append(event)
 
     return events
 
 
+def get_tsos(ws, name):
+    names = {
+        'ГУП "ТЭК СПб"': 75,
+        'ПАО "ТГК-1"': 119,
+        'ООО "Петербургтеплоэнерго"': 75,
+        'ООО "Теплоэнерго"': 75,
+        'ОАО "НПО ЦКТИ"': 100
+    }
+
+    tsos = []
+    for i in range(names[name]):
+        tso = TSO(
+            id=str(ws['A' + str(25 + i)].value),
+            title=ws['B' + str(25 + i)].value,
+            units=str(ws['C' + str(25 + i)].value or ''),
+            input_old_nvv=(ws['D' + str(25 + i)].value),
+            input_delta_nvv=(ws['E' + str(25 + i)].value),
+            input_new_nvv=(ws['F' + str(25 + i)].value),
+        )
+        tsos.append(tso)
+
+    return tsos
+
+
 def create_table_2(events, mydoc, j):
-    print(events)
     mydoc.add_paragraph('', style='_Обычный')
     mydoc.add_paragraph(
         f'Таблица Д{j} - Основные мероприятия и объемы капитальных затрат, '
@@ -71,7 +94,6 @@ def create_table_2(events, mydoc, j):
 
     for i in range(3):
         row_cells = table.add_row().cells
-        # print(events[i].id)
         row_cells[0].paragraphs[0].add_run(events[i].id)
         row_cells[1].paragraphs[0].add_run(events[i].title)
         row_cells[2].paragraphs[0].add_run(events[i].diameter)
@@ -85,7 +107,6 @@ def create_table_2(events, mydoc, j):
 
 
 def create_table_1(connections, mydoc, j):
-
     mydoc.add_paragraph('', style='_Обычный')
     mydoc.add_paragraph(
         f'Таблица Д{j} - Тепловая нагрузка перспективного потребителя, '
@@ -113,21 +134,62 @@ def create_table_1(connections, mydoc, j):
     mydoc.add_paragraph('', style='_Обычный')
 
 
+def create_table_3(tsos, mydoc, j, name):
+    names = {
+        'ГУП "ТЭК СПб"': 75,
+        'ПАО "ТГК-1"': 119,
+        'ООО "Петербургтеплоэнерго"': 75,
+        'ООО "Теплоэнерго"': 75,
+        'ОАО "НПО ЦКТИ"': 100
+    }
+
+    mydoc.add_paragraph('', style='_Обычный')
+    mydoc.add_paragraph(
+        f'Таблица Д{j} - Расчет изменения НВВ после предлагаемого подключения',
+        style='_Подпись таблицы'
+    )
+
+    table = mydoc.add_table(rows=1, cols=6)
+    table.autofit = False
+    tso = TSO()
+    table.cell(0, 0).paragraphs[0].add_run(tso.id)
+    table.cell(0, 1).paragraphs[0].add_run(tso.title)
+    table.cell(0, 2).paragraphs[0].add_run(tso.units)
+    table.cell(0, 3).paragraphs[0].add_run(tso.old_nvv)
+    table.cell(0, 4).paragraphs[0].add_run(tso.delta_nvv)
+    table.cell(0, 5).paragraphs[0].add_run(tso.new_nvv)
+
+    for i in range(names[name]):
+        row_cells = table.add_row().cells
+        row_cells[0].paragraphs[0].add_run(tsos[i].id)
+        row_cells[1].paragraphs[0].add_run(tsos[i].title)
+        row_cells[2].paragraphs[0].add_run(tsos[i].units)
+        row_cells[3].paragraphs[0].add_run(tsos[i].old_nvv)
+        row_cells[4].paragraphs[0].add_run(tsos[i].delta_nvv)
+        row_cells[5].paragraphs[0].add_run(tsos[i].new_nvv)
+
+    widths = (Cm(1.5), Cm(8.0), Cm(1.75), Cm(1.75), Cm(1.75), Cm(1.75))
+    set_col_widths(table, widths)
+    table.style = 'Table Grid'
+    mydoc.add_paragraph('', style='_Обычный')
+
+
 def main():
     print('Загружаем Excel')
     wb = load_workbook(filename='RET.xlsx', data_only=True)
     chapters_number = wb['Результат']['A1'].value
 
     books_number = 1
-    bar = Bar('Создаем Word', max=chapters_number, suffix='%(percent)d%%')
+    bar = Bar('Создаем Word', max=chapters_number)
     tables_number = 0
-    for j in range(1, chapters_number):
-        if j % 125 == 0 or j == 1:
+    for j in range(1, chapters_number + 1):
+        if j % 126 == 0 or j == 1:
             mydoc = Document('my_doc.docx')
 
         ws = wb[str(j)]
         connections = get_connections(ws)
         events = get_events(ws)
+        tsos = get_tsos(ws, ws['D16'].value)
 
         paragraphs = mydoc.paragraphs
         length = len(paragraphs)
@@ -138,13 +200,15 @@ def main():
         mydoc.add_paragraph(
             f'В настоящем разделе рассматривается целесообразность '
             f'подключения к источнику тепловой энергии {connections[2].value} '
-            f'следующей территории: {connections[7].value} '
-            f'{connections[8].value}. '
+            f'следующей территории {connections[8].value}: '
+            f'{connections[7].value}. '
             f'В таблице Д{tables_number} приведены показатели тепловой '
             f'нагрузки рассматриваемого потребителя, а также наименования ТСО,'
             f' участвующих в подключении. '
             f'Приведен вывод о целесообразности рассматриваемоего подключения '
-            f'на основе выполненных расчетов.', style='_Обычный')
+            f'на основе выполненных расчетов.',
+            style='_Обычный'
+        )
 
         create_table_1(connections, mydoc, tables_number)
 
@@ -153,14 +217,26 @@ def main():
             f'Произведеная оценка необходимых капитальных затрат '
             f'для подключения рассматриваемоего потребителя к источнику '
             f'тепловой энергии {connections[2].value} '
-            f'(таблица Д{tables_number}).'
+            f'(таблица Д{tables_number}).',
+            style='_Обычный'
         )
 
         create_table_2(events, mydoc, tables_number)
 
-        if j % 124 == 0 or j == chapters_number:
+        tables_number += 1
+        mydoc.add_paragraph(
+            f'Произведен расчет изменения НВВ с целью определения '
+            f'целесобразности подключения рассматриваемой территории '
+            f'(таблица Д{tables_number}).',
+            style='_Обычный'
+        )
+
+        create_table_3(tsos, mydoc, tables_number, ws['D16'].value)
+
+        if j % 125 == 0 or j == chapters_number:
             mydoc.save(f'mydoc{books_number}.docx')
             books_number += 1
+            tables_number = 0
         bar.next()
     bar.finish()
 
