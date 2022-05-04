@@ -1,52 +1,35 @@
-from classes import Connection, Event, TSO
+from classes import Connection, Event, Style, TSO
+from dataclasses import asdict
 from docx import Document
 from docx.shared import Cm
 from openpyxl import load_workbook
 from progress.bar import Bar
 
 
-def set_col_widths(table, widths):
-    for row in table.rows:
-        for idx, width in enumerate(widths):
-            row.cells[idx].width = width
-            row.cells[idx].paragraphs[0].style = '_Обычный_табл_10пт_по центру'
-
-
 def get_connections(ws):
-    connections = []
+    connections = [Connection()]
     for i in range(7):
         connection = Connection(
-            id=str(ws['A' + str(i + 11)].value),
+            id=ws['A' + str(i + 11)].value,
             title=ws['B' + str(i + 11)].value,
-            units=ws['C' + str(i + 11)].value or '',
-            input_value=ws['D' + str(i + 11)].value,
+            units=ws['C' + str(i + 11)].value,
+            value=ws['D' + str(i + 11)].value,
         )
         connections.append(connection)
-
-    for i in range(2):
-        connection = Connection(
-            id=str(ws['A' + str(6 + i)].value),
-            title=ws['B' + str(6 + i)].value,
-            units=ws['C' + str(6 + i)].value,
-            input_value=ws['D' + str(6 + i)].value,
-        )
-        connections.append(connection)
-
     return connections
 
 
 def get_events(ws):
-    events = []
+    events = [Event()]
     for i in range(3):
         event = Event(
-            id=str(ws['A' + str(20 + i)].value),
+            id=ws['A' + str(20 + i)].value,
             title=ws['B' + str(20 + i)].value,
-            diameter=str(ws['C' + str(20 + i)].value or ''),
-            length=str(ws['D' + str(20 + i)].value),
-            input_capex=(ws['E' + str(20 + i)].value),
+            diameter=ws['C' + str(20 + i)].value,
+            length=ws['D' + str(20 + i)].value,
+            capex=ws['E' + str(20 + i)].value,
         )
         events.append(event)
-
     return events
 
 
@@ -59,184 +42,148 @@ def get_tsos(ws, name):
         'ОАО "НПО ЦКТИ"': 100
     }
 
-    tsos = []
+    tsos = [TSO()]
     for i in range(names[name]):
         tso = TSO(
-            id=str(ws['A' + str(25 + i)].value),
+            id=ws['A' + str(25 + i)].value,
             title=ws['B' + str(25 + i)].value,
-            units=str(ws['C' + str(25 + i)].value or ''),
-            input_old_nvv=(ws['D' + str(25 + i)].value),
-            input_delta_nvv=(ws['E' + str(25 + i)].value),
-            input_new_nvv=(ws['F' + str(25 + i)].value),
+            units=ws['C' + str(25 + i)].value,
+            old_nvv=ws['D' + str(25 + i)].value,
+            delta_nvv=ws['E' + str(25 + i)].value,
+            new_nvv=ws['F' + str(25 + i)].value,
         )
         tsos.append(tso)
-
     return tsos
 
 
-def create_table_2(events, mydoc, j):
-    mydoc.add_paragraph('', style='_Обычный')
-    mydoc.add_paragraph(
-        f'Таблица Д{j} - Основные мероприятия и объемы капитальных затрат, '
-        f'необходиые для рассматриваемого подключения',
-        style='_Подпись таблицы'
-    )
+def create_table(tbl_data, mydoc, widths, table_number=1, table_name='',
+                 appendix_number='', style=Style()):
 
-    table = mydoc.add_table(rows=1, cols=5)
+    def set_col_widths(table, widths, table_number):
+        # print(table_number)
+        for row in table.rows:
+            for idx, width in enumerate(widths):
+                row.cells[idx].width = width
+                row.cells[idx].paragraphs[0].style = style.table_txt_style
+
+    mydoc.add_paragraph('', style=style.txt_style)
+
+    if table_name == '':
+        table_name = f'Таблица {appendix_number}{table_number}'
+    table_name = f'Таблица {appendix_number}{table_number} - {table_name}'
+    mydoc.add_paragraph(table_name, style=style.table_name_style)
+
+    cols_number = len(asdict(tbl_data[0]).values())
+    rows_number = len(tbl_data)
+    table = mydoc.add_table(rows=rows_number, cols=cols_number)
     table.autofit = False
-    table.cell(0, 0).paragraphs[0].add_run('№ п/п')
-    table.cell(0, 1).paragraphs[0].add_run('Наименование мероприятия')
-    table.cell(0, 2).paragraphs[0].add_run('Диаметр, мм')
-    table.cell(0, 3).paragraphs[0].add_run('Протяженность, м')
-    table.cell(0, 4).paragraphs[0].add_run(
-        'Капитальные затраты в ценах 2021 года, млн руб. без НДС'
-    )
+    for row in range(rows_number):
+        row_data = asdict(tbl_data[row]).values()
+        for key, value in enumerate(row_data):
+            table.cell(row, key).paragraphs[0].add_run(value)
 
-    for i in range(3):
-        row_cells = table.add_row().cells
-        row_cells[0].paragraphs[0].add_run(events[i].id)
-        row_cells[1].paragraphs[0].add_run(events[i].title)
-        row_cells[2].paragraphs[0].add_run(events[i].diameter)
-        row_cells[3].paragraphs[0].add_run(events[i].length)
-        row_cells[4].paragraphs[0].add_run(events[i].capex)
-
-    widths = (Cm(1.06), Cm(5.44), Cm(1.75), Cm(3.5), Cm(5.0))
-    set_col_widths(table, widths)
-    table.style = 'Table Grid'
-    mydoc.add_paragraph('', style='_Обычный')
+    table.style = style.table_style
+    set_col_widths(table, widths, table_number)
+    mydoc.add_paragraph('', style=style.txt_style)
 
 
-def create_table_1(connections, mydoc, j):
-    mydoc.add_paragraph('', style='_Обычный')
+def create_block(mydoc, ws, table_number=1, appendix_number='',
+                 style=Style()):
+    # Добавляем заголовок
+    length = len(mydoc.paragraphs)
+    mydoc.paragraphs[length - 1].style = '_1.'
+    mydoc.paragraphs[length - 1].add_run(ws['D6'].value)
+
+    #########################################################
+    # Формируем блок таблицы: абзац перед ней и таблица после
+    connections = get_connections(ws)
     mydoc.add_paragraph(
-        f'Таблица Д{j} - Тепловая нагрузка перспективного потребителя, '
-        f'источник тепловой энергии и ТСО, участвующие в подключении',
-        style='_Подпись таблицы'
+        f'В настоящем разделе рассматривается целесообразность '
+        f'подключения к источнику тепловой энергии {connections[3].value} '
+        f'следующей территории {ws["D7"].value}: '
+        f'{ws["D6"].value}. '
+        f'В таблице {appendix_number}{table_number} приведены показатели '
+        f'тепловой нагрузки рассматриваемого потребителя, а также '
+        f'наименования ТСО, участвующих в подключении. '
+        f'Приведен вывод о целесообразности рассматриваемоего подключения '
+        f'на основе выполненных расчетов.',
+        style=style.txt_style
     )
 
-    table = mydoc.add_table(rows=1, cols=4)
-    table.autofit = False
-    table.cell(0, 0).paragraphs[0].add_run('№ п/п')
-    table.cell(0, 1).paragraphs[0].add_run('Наименование показателя')
-    table.cell(0, 2).paragraphs[0].add_run('Ед. изм.')
-    table.cell(0, 3).paragraphs[0].add_run('Значения показателя')
-
-    for i in range(7):
-        row_cells = table.add_row().cells
-        row_cells[0].paragraphs[0].add_run(connections[i].id)
-        row_cells[1].paragraphs[0].add_run(connections[i].title)
-        row_cells[2].paragraphs[0].add_run(connections[i].units)
-        row_cells[3].paragraphs[0].add_run(connections[i].value)
-
+    # Задаем параметры таблицы
+    table_name = (
+        'Тепловая нагрузка перспективного потребителя, '
+        'источник тепловой энергии и ТСО, участвующие в подключении'
+    )
     widths = (Cm(1.49), Cm(4.75), Cm(1.75), Cm(8.49))
-    set_col_widths(table, widths)
-    table.style = 'Table Grid'
-    mydoc.add_paragraph('', style='_Обычный')
+    create_table(
+        connections, mydoc, widths, table_number, table_name, appendix_number
+    )
+    table_number += 1
 
-
-def create_table_3(tsos, mydoc, j, name):
-    names = {
-        'ГУП "ТЭК СПб"': 75,
-        'ПАО "ТГК-1"': 119,
-        'ООО "Петербургтеплоэнерго"': 75,
-        'ООО "Теплоэнерго"': 75,
-        'ОАО "НПО ЦКТИ"': 100
-    }
-
-    mydoc.add_paragraph('', style='_Обычный')
+    #########################################################
+    # Формируем блок таблицы: абзац перед ней и таблица после
+    events = get_events(ws)
     mydoc.add_paragraph(
-        f'Таблица Д{j} - Расчет изменения НВВ после предлагаемого подключения',
-        style='_Подпись таблицы'
+        f'Произведена оценка необходимых капитальных затрат '
+        f'для подключения рассматриваемоего потребителя к источнику '
+        f'тепловой энергии {connections[3].value} '
+        f'(таблица {appendix_number}{table_number}).',
+        style=style.txt_style
     )
 
-    table = mydoc.add_table(rows=1, cols=6)
-    table.autofit = False
-    tso = TSO()
-    table.cell(0, 0).paragraphs[0].add_run(tso.id)
-    table.cell(0, 1).paragraphs[0].add_run(tso.title)
-    table.cell(0, 2).paragraphs[0].add_run(tso.units)
-    table.cell(0, 3).paragraphs[0].add_run(tso.old_nvv)
-    table.cell(0, 4).paragraphs[0].add_run(tso.delta_nvv)
-    table.cell(0, 5).paragraphs[0].add_run(tso.new_nvv)
+    # Задаем параметры таблицы
+    table_name = (
+        'Основные мероприятия и объемы капитальных затрат, '
+        'необходиые для рассматриваемого подключения'
+    )
+    widths = (Cm(1.24), Cm(5.50), Cm(1.75), Cm(2.50), Cm(5.49))
+    create_table(
+        events, mydoc, widths, table_number, table_name, appendix_number
+    )
+    table_number += 1
 
-    for i in range(names[name]):
-        row_cells = table.add_row().cells
-        row_cells[0].paragraphs[0].add_run(tsos[i].id)
-        row_cells[1].paragraphs[0].add_run(tsos[i].title)
-        row_cells[2].paragraphs[0].add_run(tsos[i].units)
-        row_cells[3].paragraphs[0].add_run(tsos[i].old_nvv)
-        row_cells[4].paragraphs[0].add_run(tsos[i].delta_nvv)
-        row_cells[5].paragraphs[0].add_run(tsos[i].new_nvv)
+    #########################################################
+    # Формируем блок таблицы: абзац перед ней и таблица после
+    tsos = get_tsos(ws, ws['D16'].value)
+    mydoc.add_paragraph(
+        f'Произведен расчет изменения НВВ с целью определения '
+        f'целесобразности подключения рассматриваемой территории '
+        f'(таблица {appendix_number}{table_number}).',
+        style=style.txt_style
+    )
 
+    # Задаем параметры таблицы
+    table_name = 'Расчет изменения НВВ после предлагаемого подключения'
     widths = (Cm(1.5), Cm(8.0), Cm(1.75), Cm(1.75), Cm(1.75), Cm(1.75))
-    set_col_widths(table, widths)
-    table.style = 'Table Grid'
-    mydoc.add_paragraph('', style='_Обычный')
+    create_table(
+        tsos, mydoc, widths, table_number, table_name, appendix_number
+    )
+    table_number += 1
 
 
 def main():
     print('Загружаем Excel')
     wb = load_workbook(filename='RET.xlsx', data_only=True)
-    chapters_number = wb['Результат']['A1'].value
+    chapters_number = 5  # wb['Результат']['A1'].value
+    # style = Style(txt_style='Обычный')
 
     books_number = 1
-    bar = Bar('Создаем Word', max=chapters_number)
-    tables_number = 0
+    appendix_number = 'Д'
+    tables_number = 1
+    bar = Bar('Создаем Word', max=chapters_number)  # Индикатор выполнения
     for j in range(1, chapters_number + 1):
-        if j % 126 == 0 or j == 1:
-            mydoc = Document('my_doc.docx')
-
         ws = wb[str(j)]
-        connections = get_connections(ws)
-        events = get_events(ws)
-        tsos = get_tsos(ws, ws['D16'].value)
-
-        paragraphs = mydoc.paragraphs
-        length = len(paragraphs)
-        paragraphs[length - 1].style = '_1.'
-        paragraphs[length - 1].add_run(connections[7].value)
-
-        tables_number += 1
-        mydoc.add_paragraph(
-            f'В настоящем разделе рассматривается целесообразность '
-            f'подключения к источнику тепловой энергии {connections[2].value} '
-            f'следующей территории {connections[8].value}: '
-            f'{connections[7].value}. '
-            f'В таблице Д{tables_number} приведены показатели тепловой '
-            f'нагрузки рассматриваемого потребителя, а также наименования ТСО,'
-            f' участвующих в подключении. '
-            f'Приведен вывод о целесообразности рассматриваемоего подключения '
-            f'на основе выполненных расчетов.',
-            style='_Обычный'
-        )
-
-        create_table_1(connections, mydoc, tables_number)
-
-        tables_number += 1
-        mydoc.add_paragraph(
-            f'Произведеная оценка необходимых капитальных затрат '
-            f'для подключения рассматриваемоего потребителя к источнику '
-            f'тепловой энергии {connections[2].value} '
-            f'(таблица Д{tables_number}).',
-            style='_Обычный'
-        )
-
-        create_table_2(events, mydoc, tables_number)
-
-        tables_number += 1
-        mydoc.add_paragraph(
-            f'Произведен расчет изменения НВВ с целью определения '
-            f'целесобразности подключения рассматриваемой территории '
-            f'(таблица Д{tables_number}).',
-            style='_Обычный'
-        )
-
-        create_table_3(tsos, mydoc, tables_number, ws['D16'].value)
-
-        if j % 125 == 0 or j == chapters_number:
+        # Разбиваем на книги
+        if j % 125 == 0 or j == 1:
+            mydoc = Document('my_doc.docx')
+        # Создаем повторяющийся блок документа
+        create_block(mydoc, ws, tables_number, appendix_number)
+        # Разбиваем на книги
+        if j % 124 == 0 or j == chapters_number:
             mydoc.save(f'mydoc{books_number}.docx')
             books_number += 1
-            tables_number = 0
+            tables_number = 1
         bar.next()
     bar.finish()
 
