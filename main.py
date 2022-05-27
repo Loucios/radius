@@ -1,12 +1,13 @@
-from classes import Connection, Event, Style, TSO
-from dataclasses import asdict
+from classes import Connection, Event, Style, Table, TSO
 from docx import Document
 from docx.shared import Cm
 from openpyxl import load_workbook
 from progress.bar import Bar
 
 
-def get_connections(ws):
+def get_connections(wb, j):
+
+    '''
     connections = [Connection()]
     for i in range(7):
         connection = Connection(
@@ -16,7 +17,22 @@ def get_connections(ws):
             value=ws['D' + str(i + 11)].value,
         )
         connections.append(connection)
-    return connections
+    return connections'''
+
+    rng = wb.defined_names.get('Table1', scope=wb.sheetnames.index(str(j)))
+    rng_dict = dict(rng.destinations)
+    dest = rng_dict[str(j)]
+    private_range = wb[str(j)][dest]
+
+    tbl_data = []
+    for row in private_range:
+        cell_values = []
+        for cell in row:
+            cell_values.append(cell.value)
+        tbl_data.append(Connection(*cell_values))
+
+    # print(tbl_data)
+    return tbl_data
 
 
 def get_events(ws):
@@ -56,38 +72,7 @@ def get_tsos(ws, name):
     return tsos
 
 
-def create_table(tbl_data, mydoc, widths, table_number=1, table_name='',
-                 appendix_number='', style=Style()):
-
-    def set_col_widths(table, widths, table_number):
-        # print(table_number)
-        for row in table.rows:
-            for idx, width in enumerate(widths):
-                row.cells[idx].width = width
-                row.cells[idx].paragraphs[0].style = style.table_txt_style
-
-    mydoc.add_paragraph('', style=style.txt_style)
-
-    if table_name == '':
-        table_name = f'Таблица {appendix_number}{table_number}'
-    table_name = f'Таблица {appendix_number}{table_number} - {table_name}'
-    mydoc.add_paragraph(table_name, style=style.table_name_style)
-
-    cols_number = len(asdict(tbl_data[0]).values())
-    rows_number = len(tbl_data)
-    table = mydoc.add_table(rows=rows_number, cols=cols_number)
-    table.autofit = False
-    for row in range(rows_number):
-        row_data = asdict(tbl_data[row]).values()
-        for key, value in enumerate(row_data):
-            table.cell(row, key).paragraphs[0].add_run(value)
-
-    table.style = style.table_style
-    set_col_widths(table, widths, table_number)
-    mydoc.add_paragraph('', style=style.txt_style)
-
-
-def create_block(mydoc, ws, table_number=1, appendix_number='',
+def create_block(mydoc, ws, j, table_number=1, appendix_number='',
                  style=Style()):
     # Добавляем заголовок
     length = len(mydoc.paragraphs)
@@ -96,7 +81,7 @@ def create_block(mydoc, ws, table_number=1, appendix_number='',
 
     #########################################################
     # Формируем блок таблицы: абзац перед ней и таблица после
-    connections = get_connections(ws)
+    connections = get_connections(wb, j)
     mydoc.add_paragraph(
         f'В настоящем разделе рассматривается целесообразность '
         f'подключения к источнику тепловой энергии {connections[3].value} '
@@ -116,9 +101,10 @@ def create_block(mydoc, ws, table_number=1, appendix_number='',
         'источник тепловой энергии и ТСО, участвующие в подключении'
     )
     widths = (Cm(1.49), Cm(4.75), Cm(1.75), Cm(8.49))
-    create_table(
-        connections, mydoc, widths, table_number, table_name, appendix_number
+    connections_table = Table(
+        connections, widths, table_number, table_name, appendix_number
     )
+    connections_table.create_table(mydoc)
     table_number += 1
 
     #########################################################
@@ -138,9 +124,10 @@ def create_block(mydoc, ws, table_number=1, appendix_number='',
         'необходиые для рассматриваемого подключения'
     )
     widths = (Cm(1.24), Cm(5.50), Cm(1.75), Cm(2.50), Cm(5.49))
-    create_table(
-        events, mydoc, widths, table_number, table_name, appendix_number
+    events_table = Table(
+        events, widths, table_number, table_name, appendix_number
     )
+    events_table.create_table(mydoc)
     table_number += 1
 
     #########################################################
@@ -156,9 +143,10 @@ def create_block(mydoc, ws, table_number=1, appendix_number='',
     # Задаем параметры таблицы
     table_name = 'Расчет изменения НВВ после предлагаемого подключения'
     widths = (Cm(1.5), Cm(8.0), Cm(1.75), Cm(1.75), Cm(1.75), Cm(1.75))
-    create_table(
-        tsos, mydoc, widths, table_number, table_name, appendix_number
+    events_table = Table(
+        tsos, widths, table_number, table_name, appendix_number
     )
+    events_table.create_table(mydoc)
     table_number += 1
 
 
@@ -178,7 +166,7 @@ def main():
         if j % 125 == 0 or j == 1:
             mydoc = Document('my_doc.docx')
         # Создаем повторяющийся блок документа
-        create_block(mydoc, ws, tables_number, appendix_number)
+        create_block(mydoc, ws, j, tables_number, appendix_number)
         # Разбиваем на книги
         if j % 124 == 0 or j == chapters_number:
             mydoc.save(f'mydoc{books_number}.docx')
