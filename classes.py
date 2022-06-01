@@ -163,3 +163,10 @@ class Table:
 
     def __str__(self):
         return self.table_name
+
+
+dataclasses_list = {
+    'Table1': Connection,
+    'table2': Event,
+    'Table3': TSO,
+}
