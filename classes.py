@@ -2,6 +2,14 @@ from dataclasses import asdict, dataclass
 
 
 @dataclass
+class Data:
+
+    @classmethod
+    def from_list(cls, *args):
+        return cls(*args)
+
+
+@dataclass
 class Connection:
     id: str = '№ п/п'
     title: str = 'Наименование мероприятия'
@@ -111,7 +119,7 @@ class Style:
 
 
 class Table:
-    def __init__(self, tbl_data, widths, table_number=1, table_name='',
+    def __init__(self, tbl_data, widths=None, table_number=1, table_name='',
                  appendix_number='', style=Style()):
         self.data = tbl_data
         self.style = style
@@ -127,8 +135,8 @@ class Table:
                 f'{table_name}'
             )
 
-    def __set_col_widths(self):
-        for row in self.data.rows:
+    def __set_col_widths(self, table):
+        for row in table.rows:
             for idx, width in enumerate(self.widths):
                 row.cells[idx].width = width
                 row.cells[idx].paragraphs[0].style = (
@@ -140,12 +148,25 @@ class Table:
         mydoc.add_paragraph(self.table_name, style=self.style.table_name_style)
 
         table = mydoc.add_table(rows=self.rows_number, cols=self.cols_number)
-        table.autofit = False
+
         for row in range(self.rows_number):
             row_data = asdict(self.data[row]).values()
             for key, value in enumerate(row_data):
                 table.cell(row, key).paragraphs[0].add_run(value)
         table.style = self.style.table_style
 
-        self.__set_col_widths(table, self.widths, self.table_number)
+        if self.widths is not None:
+            table.autofit = False
+            self.__set_col_widths(table)
+
         mydoc.add_paragraph('', style=self.style.txt_style)
+
+    def __str__(self):
+        return self.table_name
+
+
+dataclasses_list = {
+    'Table1': Connection,
+    'table2': Event,
+    'Table3': TSO,
+}

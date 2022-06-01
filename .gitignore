@@ -130,4 +130,5 @@ dmypy.json
 
 # MS Office
 *.xlsx
+*.xlsm
 *.docx
