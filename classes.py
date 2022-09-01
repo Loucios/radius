@@ -1,12 +1,63 @@
 from dataclasses import asdict, dataclass
+from docx.shared import Cm
 
 
-@dataclass
-class Data:
+class BaseData:
+    # @property
+    @classmethod
+    def data(cls):
+        return {
+            'Table1': {
+                'class': Connection,
+                'widths': [1.49, 4.75, 1.75, 8.49],
+                'name': 'Тепловая нагрузка перспективного потребителя, '
+                'источник тепловой энергии и ТСО, участвующие в подключении',
+            },
+            'table2': {
+                'class': Event,
+                'widths': [1.24, 5.50, 1.75, 2.50, 5.49],
+                'name': 'Основные мероприятия и объемы капитальных затрат, '
+                'необходиые для рассматриваемого подключения',
+            },
+            'Table3': {
+                'class': TSO,
+                'widths': [1.5, 8.0, 1.75, 1.75, 1.75, 1.75],
+                'name': 'Расчет изменения НВВ после предлагаемого подключения',
+            },
+        }
 
     @classmethod
-    def from_list(cls, *args):
-        return cls(*args)
+    def get_class(cls, table_name):
+        return cls.data().get(table_name)['class']
+
+    @classmethod
+    def get_name(cls, table_name):
+        return cls.data().get(table_name)['name']
+
+    @classmethod
+    def get_widths(cls, table_name):
+        return cls.data().get(table_name)['widths']
+
+
+class TableData:
+    def __init__(self, wb, j, table_name):
+        self.name = BaseData.get_name(table_name)
+        self.widths = BaseData.get_widths(table_name)
+
+        rng = wb.defined_names.get(table_name,
+                                   scope=wb.sheetnames.index(str(j)))
+        rng_dict = dict(rng.destinations)
+        dest = rng_dict[str(j)]
+        private_range = wb[str(j)][dest]
+
+        data = []
+        for row in private_range:
+            cell_values = []
+            for cell in row:
+                cell_values.append(cell.value)
+            data.append(BaseData.get_class(table_name)(*cell_values))
+
+        self.data = data
 
 
 @dataclass
@@ -119,20 +170,23 @@ class Style:
 
 
 class Table:
-    def __init__(self, tbl_data, widths=None, table_number=1, table_name='',
-                 appendix_number='', style=Style()):
-        self.data = tbl_data
+    def __init__(self, data, name, widths, number=1, appendix='',
+                 style=Style()):
+        self.data = data
         self.style = style
-        self.cols_number = len(asdict(tbl_data[0]).values())
-        self.rows_number = len(tbl_data)
+        self.cols_number = len(asdict(data[0]).values())
+        self.rows_number = len(data)
         self.widths = widths
 
-        if table_name == '':
-            self.table_name = f'Таблица {appendix_number}{table_number}'
+        if self.widths is not None:
+            self.widths = [Cm(width) for width in self.widths]
+
+        if name == '':
+            self.table_name = f'Таблица {appendix}{number}'
         else:
             self.table_name = (
-                f'Таблица {appendix_number}{table_number} - '
-                f'{table_name}'
+                f'Таблица {appendix}{number} - '
+                f'{name}'
             )
 
     def __set_col_widths(self, table):
@@ -163,10 +217,3 @@ class Table:
 
     def __str__(self):
         return self.table_name
-
-
-dataclasses_list = {
-    'Table1': Connection,
-    'table2': Event,
-    'Table3': TSO,
-}
