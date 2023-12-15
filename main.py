@@ -96,7 +96,7 @@ def create_block(mydoc, wb, j, table_number=1, appendix='', style=Style()):
 
 def main():
     print('Загружаем Excel')
-    wb = load_workbook(filename='RET4.xlsm', data_only=True)
+    wb = load_workbook(filename='RET5.xlsm', data_only=True)
     chapters_number = wb['Результат']['A1'].value
 
     books_number = 1
